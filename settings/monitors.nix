@@ -1,7 +1,7 @@
 { config, lib, ... }:
 {
   config.eiros.users.lcleveland.mangowc.settings.monitorrule = [
-    "DP-4,0.55,1,scroller,0,1,0,0,1920,1200,60"
-    "DP-3,0.55,1,scroller,0,1,0,1200,3840,1080,120"
+    "name:DP-4,rr:0,scale:1,x:0,y:0,width:1920,height:1200,refresh:60"
+    "name:DP-3,rr:0,scale:1,x:0,y:1200,width:3840,height:1080,refresh:120"
   ];
 }
