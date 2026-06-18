@@ -1,17 +1,28 @@
-{ ... }:
+{ pkgs, ... }:
 let
-  # Dead/unpopulated internal port on the onboard ASUS USB controller
-  # (PCI 0000:0d:00.0). Its phantom device never enumerates; the kernel retries
-  # for ~60s during the initrd, stalling systemd-udevd shutdown / switch-root and
-  # producing a ~68s white-screen hang before the greeter. Disabling the port stops
-  # the enumeration entirely. Keyed on the stable PCI address so it survives USB
-  # bus renumbering (the only *-port8 under that controller is always the dead port).
-  # Applied in the initrd (where the hang is) and in stage-2.
-  disablePort8 = ''
-    ACTION=="add", KERNELS=="0000:0d:00.0", DRIVERS=="xhci_hcd", KERNEL=="*-port8", ATTR{disable}="1", ATTR{early_stop}="1"
+  # Disable the dead/unpopulated internal port (port 8) on the onboard ASUS xHCI
+  # controller at the stable PCI address 0000:0d:00.0. Bus-number-agnostic glob.
+  disablePort8 = pkgs.writeShellScript "disable-usb-port8" ''
+    for f in /sys/bus/pci/devices/0000:0d:00.0/usb*/*-0:1.0/*-port8/disable; do
+      [ -e "$f" ] && echo 1 > "$f"
+    done
   '';
 in
 {
-  boot.initrd.services.udev.rules = disablePort8;
-  services.udev.extraRules = disablePort8;
+  # (1) Boot-hang fix (deterministic, race-free).
+  # The dead port's USB enumeration retry storm keeps the initrd's systemd-udevd from
+  # stopping for ~65s, which blocks switch-root and shows as a long white screen before
+  # the greeter. Bound that wait: systemd SIGKILLs udevd after the timeout and proceeds.
+  # Safe — root is already mounted at this point and stage-2 re-runs udev coldplug.
+  boot.initrd.systemd.services.systemd-udevd = {
+    overrideStrategy = "asDropin";
+    serviceConfig.TimeoutStopSec = "5s";
+  };
+
+  # (2) Stop the kernel retry storm in the running system (silences the USB error spam
+  # and stops the controller being hammered). Keyed on the udev-processed root hub of the
+  # stable controller; the script writes the dead port's disable attribute. Non-blocking.
+  services.udev.extraRules = ''
+    ACTION=="add", SUBSYSTEM=="usb", KERNEL=="usb[0-9]*", KERNELS=="0000:0d:00.0", RUN+="${disablePort8}"
+  '';
 }
