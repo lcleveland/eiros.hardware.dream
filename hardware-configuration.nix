@@ -8,7 +8,13 @@
     [ (modulesPath + "/installer/scan/not-detected.nix")
     ];
 
-  boot.initrd.availableKernelModules = [ "nvme" "xhci_pci" "ahci" "thunderbolt" "usbhid" "usb_storage" "sd_mod" ];
+  # USB controller/peripheral modules (xhci_pci, thunderbolt, usbhid, usb_storage)
+  # intentionally excluded from the initrd: a flaky internal USB device (usb1-port8)
+  # stalls a udev worker for ~60s during early boot, blocking systemd-udevd shutdown
+  # and switch-root. Root is on NVMe with no USB-entered LUKS passphrase, so USB is
+  # not needed in the initrd — it initializes in stage-2 instead, where the failing
+  # port retries harmlessly in the background.
+  boot.initrd.availableKernelModules = [ "nvme" "ahci" "sd_mod" ];
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ "kvm-amd" ];
   boot.extraModulePackages = [ ];
