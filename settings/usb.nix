@@ -9,17 +9,12 @@ let
   '';
 in
 {
-  # (1) Boot-hang fix (deterministic, race-free).
-  # The dead port's USB enumeration retry storm keeps the initrd's systemd-udevd from
-  # stopping for ~65s, which blocks switch-root and shows as a long white screen before
-  # the greeter. Bound that wait: systemd SIGKILLs udevd after the timeout and proceeds.
-  # Safe — root is already mounted at this point and stage-2 re-runs udev coldplug.
-  boot.initrd.systemd.services.systemd-udevd = {
-    overrideStrategy = "asDropin";
-    serviceConfig.TimeoutStopSec = "5s";
-  };
+  # NOTE: The initrd boot-hang fix (capping systemd-udevd TimeoutStopSec to 5s in the
+  # initrd) was removed to test whether the ~65s switch-root hang is fixed upstream.
+  # If the long white screen returns at boot, restore the
+  # boot.initrd.systemd.services.systemd-udevd drop-in (see git history).
 
-  # (2) Stop the kernel retry storm in the running system (silences the USB error spam
+  # Stop the kernel retry storm in the running system (silences the USB error spam
   # and stops the controller being hammered). Keyed on the udev-processed root hub of the
   # stable controller; the script writes the dead port's disable attribute. Non-blocking.
   services.udev.extraRules = ''
