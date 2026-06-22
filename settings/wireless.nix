@@ -25,12 +25,11 @@
     ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x14c3", ATTR{device}=="0x7927", ATTR{link/l1_aspm}="0"
   '';
 
-  # The MT7927's registers read 0x0000 (ASIC revision/CHIPID), because an ACPI
-  # device (AMDIF031) collides with the chipset bridge window, forcing the kernel
-  # to reassign every BAR down the deep PCIe switch chain to the WiFi — which
-  # breaks the driver's register remap. Force a clean reallocation of bridge
-  # windows so the BARs land somewhere the register window actually reaches.
-  # If CHIPID still reads 0x0000 after this, swap "pci=realloc" for "pci=nocrs"
-  # (more aggressive: ignores the BIOS resource map entirely).
-  boot.kernelParams = [ "pci=realloc" ];
+  # The MT7927's registers read 0x0000 (ASIC revision/CHIPID): an ACPI device
+  # (AMDIF031) collides with the chipset bridge window, so the kernel can't claim
+  # the BIOS PCIe layout and reassigns the WiFi's BARs. pci=realloc didn't help, so
+  # try pci=nocrs: ignore the BIOS _CRS resource map entirely and let the kernel
+  # allocate the whole PCIe tree from scratch, hopefully avoiding the conflict.
+  # NOTE: aggressive — can disturb other devices; sanity-check USB/GPU/NVMe on boot.
+  boot.kernelParams = [ "pci=nocrs" ];
 }
