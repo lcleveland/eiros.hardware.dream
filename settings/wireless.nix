@@ -1,24 +1,27 @@
-{ pkgs, ... }:
+{ pkgs, lib, ... }:
 {
   # Onboard MediaTek MT7927 (MT6639, "Filogic 380") Wi-Fi 7 + Bluetooth combo.
-  # This chip is newer than the in-tree mt7925e driver (which only matches PCI IDs
-  # 7925/0717, not 7927), so no driver binds and there's no Wi-Fi. The BT half
-  # (USB 0489:e13a) shares MediaTek's CONNINFRA subsystem with Wi-Fi and can't
-  # enumerate until the Wi-Fi driver inits it — without the driver it times out
-  # (error -110) and the kernel's ~64s retry storm stalls the initrd (the boot
-  # hang). Both are fixed by the out-of-tree driver + extracted ASUS firmware from
-  # github:cmspam/mt7927-nixos (wired in via flake.nix).
-  hardware.mediatek-mt7927 = {
-    enable = true;
-    enableWifi = true;
-    enableBluetooth = true;
-    disableAspm = true; # MT7927 needs ASPM off for stability/throughput
-  };
+  # Newer than the in-tree mt7925e driver (which matches PCI IDs 7925/0717, not
+  # 7927), so nothing binds and there's no Wi-Fi. github:clemenscodes/linux-mt7927
+  # rebuilds the kernel's own mt76 + btusb/btmtk with a small 7927 patch and
+  # installs them at the in-tree module path (replacing the stock ones), and
+  # extracts the ASUS WLAN/BT firmware.
+  mt7927.enable = true;
 
-  # The out-of-tree mt76 driver targets the 6.19.x-era mac80211 API and does NOT
-  # build against kernel 7.1 (IEEE80211_MIN_ACTION_SIZE / mgmt->u.action.u were
-  # reworked in 7.x). Pin the system to 6.18 — the only packaged series that is
-  # both >= the driver's 6.17 minimum and < 7.x. Revert to linuxPackages_latest
-  # once upstream (cmspam/jetm) gains 7.x support.
+  # The mt76 patch targets a 6.x tree; 6.18 is the closest packaged series (>= the
+  # driver's 6.17 floor, < 7.x where mac80211's action-frame API changed and the
+  # out-of-tree build broke).
   eiros.system.boot.kernel.package = pkgs.linuxPackages_6_18;
+
+  # Kill the initrd boot hang: the onboard BT on usb1-port8 can't enumerate until
+  # the Wi-Fi driver inits MediaTek's CONNINFRA (stage-2), so don't bring USB up in
+  # stage-1. Root is on NVMe, so USB isn't needed in the initrd; Wi-Fi+BT come up
+  # in stage-2 instead of stalling switch-root for ~64s.
+  boot.initrd.availableKernelModules = lib.mkForce [ "nvme" "ahci" "sd_mod" ];
+
+  # MT7927 needs PCIe ASPM off for stability/throughput; clemenscodes has no toggle
+  # for it, so disable it on the device directly.
+  services.udev.extraRules = ''
+    ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x14c3", ATTR{device}=="0x7927", ATTR{link/l1_aspm}="0"
+  '';
 }

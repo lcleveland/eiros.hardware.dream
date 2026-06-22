@@ -1,6 +1,6 @@
 {
   description = "Hardware configuration for my Framework 16";
-  inputs.mt7927.url = "github:cmspam/mt7927-nixos";
+  inputs.mt7927.url = "github:clemenscodes/linux-mt7927";
   outputs =
     { self, mt7927, ... }:
     {
