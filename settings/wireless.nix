@@ -5,10 +5,12 @@
   # via resources/nix/mt7927.nix from flake.nix. This file holds the supporting
   # hardware config that doesn't need the flake input.
 
-  # Testing on the latest kernel (7.1). The jetm driver builds a linux-7.0-era
-  # mt76 tree, so this may fail to compile against 7.1's mac80211 — if the rebuild
-  # errors on the mt7927-mt76 derivation, pin back to pkgs.linuxPackages_6_18.
-  eiros.system.boot.kernel.package = pkgs.linuxPackages_latest;
+  # Pinned to 6.18: the jetm driver builds a linux-7.0-era mt76 tree that does NOT
+  # compile against 7.1's reworked mac80211 (IEEE80211_MIN_ACTION_SIZE became a
+  # macro, the ieee80211_mgmt action union changed). 6.18 is the closest packaged
+  # series the driver builds against. Bump to latest only after MT7927 support is
+  # upstream (then no out-of-tree driver is needed).
+  eiros.system.boot.kernel.package = pkgs.linuxPackages_6_18;
 
   # Bound the initrd udevd stop at 5s so the onboard BT failing to enumerate in
   # stage-1 (Wi-Fi/CONNINFRA only comes up in stage-2) can't stall switch-root for
