@@ -1,23 +1,15 @@
-{ pkgs, ... }:
-let
-  # Disable the dead/unpopulated internal port (port 8) on the onboard ASUS xHCI
-  # controller at the stable PCI address 0000:0d:00.0. Bus-number-agnostic glob.
-  disablePort8 = pkgs.writeShellScript "disable-usb-port8" ''
-    for f in /sys/bus/pci/devices/0000:0d:00.0/usb*/*-0:1.0/*-port8/disable; do
-      [ -e "$f" ] && echo 1 > "$f"
-    done
-  '';
-in
+{ ... }:
 {
-  # NOTE: The initrd boot-hang fix (capping systemd-udevd TimeoutStopSec to 5s in the
-  # initrd) was removed to test whether the ~65s switch-root hang is fixed upstream.
-  # If the long white screen returns at boot, restore the
-  # boot.initrd.systemd.services.systemd-udevd drop-in (see git history).
-
-  # Stop the kernel retry storm in the running system (silences the USB error spam
-  # and stops the controller being hammered). Keyed on the udev-processed root hub of the
-  # stable controller; the script writes the dead port's disable attribute. Non-blocking.
-  services.udev.extraRules = ''
-    ACTION=="add", SUBSYSTEM=="usb", KERNEL=="usb[0-9]*", KERNELS=="0000:0d:00.0", RUN+="${disablePort8}"
-  '';
+  # usb1-port8 is the onboard MediaTek Bluetooth radio (0489:e13a, the BT half of
+  # the MT7927 Wi-Fi 7 card). Kernel 7.1.0 regressed its USB enumeration: the
+  # controller times out (device descriptor read/64, error -110), resets, and
+  # retries for ~64s during the initrd, which stalls systemd-udevd and blocks
+  # switch-root (the ~65s white screen). Kernels 7.0.x enumerated it fine.
+  #
+  # old_scheme_first changes the enumeration ordering (set address before reading
+  # the full descriptor) and is the canonical fix for -110 descriptor-read
+  # timeouts. A kernel cmdline param applies in the initrd too, which is where the
+  # hang occurs. See plan: ~/.claude/plans/this-is-still-broke-effervescent-hennessy.md
+  # Fallbacks if this is insufficient: add "usbcore.autosuspend=-1", then "pcie_aspm=off".
+  boot.kernelParams = [ "usbcore.old_scheme_first=1" ];
 }
