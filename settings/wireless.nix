@@ -1,4 +1,4 @@
-{ pkgs, lib, ... }:
+{ pkgs, ... }:
 {
   # Onboard MediaTek MT7927 (MT6639, "Filogic 380") Wi-Fi 7 + Bluetooth combo.
   # Newer than the in-tree mt7925e driver (which matches PCI IDs 7925/0717, not
@@ -13,11 +13,16 @@
   # out-of-tree build broke).
   eiros.system.boot.kernel.package = pkgs.linuxPackages_6_18;
 
-  # Kill the initrd boot hang: the onboard BT on usb1-port8 can't enumerate until
-  # the Wi-Fi driver inits MediaTek's CONNINFRA (stage-2), so don't bring USB up in
-  # stage-1. Root is on NVMe, so USB isn't needed in the initrd; Wi-Fi+BT come up
-  # in stage-2 instead of stalling switch-root for ~64s.
-  boot.initrd.availableKernelModules = lib.mkForce [ "nvme" "ahci" "sd_mod" ];
+  # Kill the ~64s boot hang SAFELY (do NOT strip initrd modules — that drops the
+  # includeDefaultModules set the initrd needs to mount root and lands in emergency
+  # mode). The onboard BT on usb1-port8 can't enumerate until the Wi-Fi driver
+  # inits MediaTek's CONNINFRA in stage-2, so the initrd's systemd-udevd gets stuck
+  # on its USB coldplug worker. Bound that wait: systemd SIGKILLs udevd after 5s and
+  # proceeds with switch-root (root is already mounted; stage-2 re-runs coldplug).
+  boot.initrd.systemd.services.systemd-udevd = {
+    overrideStrategy = "asDropin";
+    serviceConfig.TimeoutStopSec = "5s";
+  };
 
   # MT7927 needs PCIe ASPM off for stability/throughput; clemenscodes has no toggle
   # for it, so disable it on the device directly.
